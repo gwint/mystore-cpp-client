@@ -68,6 +68,24 @@ mystore::Client::getHelper(std::string key, std::string clientIdentifier, int re
 
 bool
 mystore::Client::putHelper(std::string key, std::string value, std::string clientIdentifier, int requestIdentifier) {
+    int numCyclesBeforeQuitting =
+            atoi(dotenv::env[mystore::Client::NUM_RETRY_CYCLES_BEFORE_QUITTING_ENV_VAR_NAME].c_str());
+    int numRetriesBeforeChangingRequestID =
+            atoi(dotenv::env[mystore::Client::NUM_REQUEST_RETRIES_ENV_VAR_NAME].c_str());
+    int pauseDurationAfterRetryMS =
+            atoi(dotenv::env[mystore::Client::REST_PERIOD_BETWEEN_CALLS_ENV_VAR_NAME].c_str());
+
+    std::pair<std::string, int> replicaInfo = this->getLeaderInfo();
+
+    int currentRequestNumber = requestIdentifier;
+    std::string host = replicaInfo.first;
+    int port = replicaInfo.second;
+
+    for(int cycleNum = 0; cycleNum < numCyclesBeforeQuitting; ++cycleNum) {
+        for(int retryNum = 0; retryNum < numRetriesBeforeChangingRequestID; ++retryNum) {
+        }
+    }
+
     return false;
 }
 
