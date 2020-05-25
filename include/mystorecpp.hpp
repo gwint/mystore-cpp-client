@@ -3,12 +3,32 @@
 
 #include <string>
 #include <unordered_map>
+#include <initializer_list>
+#include <vector>
 
-namespace client {
+#include <thrift/transport/TServerSocket.h>
+#include <thrift/transport/TBufferTransports.h>
+#include <thrift/transport/TSocket.h>
+#include <thrift/transport/TTransport.h>
+#include <thrift/protocol/TBinaryProtocol.h>
+#include <thrift/server/TThreadedServer.h>
+
+#include "replicaservice_types.h"
+#include "ReplicaService.h"
+
+namespace mystore {
     class Client {
         private:
+            std::vector<std::string> endpoints;
+
             bool getHelper(std::string, std::string, int);
             bool putHelper(std::string, std::string, std::string, int);
+            std::pair<std::string, int> getLeaderInfo();
+            std::pair<std::string, int> getRandomReplica();
+            int getNextRequestIdentifier();
+            void setNextRequestIdentifier(int);
+
+            static bool isNullID(const ID&);
 
             static const char* REQUEST_IDENTIFIER_ENV_VAR_NAME;
             static const char* MOST_RECENT_LEADER_ADDR_ENV_VAR_NAME;
@@ -19,6 +39,7 @@ namespace client {
             static const char* CLUSTER_MEMBERSHIP_FILE_NAME_ENV_VAR_NAME;
 
         public:
+            Client(std::initializer_list<std::string>);
             bool put(std::string, std::string);
             std::string get(std::string);
             void killReplica(std::string);
