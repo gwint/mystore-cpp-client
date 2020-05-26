@@ -144,12 +144,6 @@ mystore::Client::putHelper(std::string key, std::string value, std::string clien
     int pauseDurationAfterRetryMS =
             atoi(dotenv::env[mystore::Client::REST_PERIOD_BETWEEN_CALLS_ENV_VAR_NAME].c_str());
 
-    std::cout << dotenv::env["CMD_LINE_TOOL_TIMEOUT_MS"] << "\n";
-    std::cout << numCyclesBeforeQuitting << std::endl;
-    std::cout << numRetriesBeforeChangingRequestID << std::endl;
-    std::cout << pauseDurationAfterRetryMS << std::endl;
-    std::cout << mystore::Client::NUM_RETRY_CYCLES_BEFORE_QUITTING_ENV_VAR_NAME << "\n";
-
     std::pair<std::string, int> replicaInfo = this->getLeaderInfo();
 
     int currentRequestNumber = requestIdentifier;
@@ -157,9 +151,7 @@ mystore::Client::putHelper(std::string key, std::string value, std::string clien
     int port = replicaInfo.second;
 
     for(int cycleNum = 0; cycleNum < numCyclesBeforeQuitting; ++cycleNum) {
-        std::cout << "in looop\n";
         for(int retryNum = 0; retryNum < numRetriesBeforeChangingRequestID; ++retryNum) {
-            std::cout << "inner loop\n";
             std::shared_ptr<apache::thrift::transport::TSocket> socket(new apache::thrift::transport::TSocket(host, port));
             socket->setConnTimeout(atoi(dotenv::env[mystore::Client::RPC_TIMEOUT_ENV_VAR_NAME].c_str()));
             socket->setSendTimeout(atoi(dotenv::env[mystore::Client::RPC_TIMEOUT_ENV_VAR_NAME].c_str()));
