@@ -28,7 +28,7 @@ using apache::thrift::transport::TTransportException;
 const char* mystore::Client::REQUEST_IDENTIFIER_ENV_VAR_NAME = "REQUEST_ID_FILE";
 const char* mystore::Client::MOST_RECENT_LEADER_ADDR_ENV_VAR_NAME = "CURRENT_LEADER_INFO_FILE";
 const char* mystore::Client::RPC_TIMEOUT_ENV_VAR_NAME = "CMD_LINE_TOOL_TIMEOUT_MS";
-const char* mystore::Client::NUM_REQUEST_RETRIES_ENV_VAR_NAME = "CMD_LINE_TOTAL_NUM_RETRIES_PER_REQUEST";
+const char* mystore::Client::NUM_REQUEST_RETRIES_ENV_VAR_NAME = "CMD_LINE_TOOL_NUM_RETRIES_PER_REQUEST";
 const char* mystore::Client::REST_PERIOD_BETWEEN_CALLS_ENV_VAR_NAME = "CMD_LINE_TOOL_REST_PERIOD_BETWEEN_CALLS_MS";
 const char* mystore::Client::NUM_RETRY_CYCLES_BEFORE_QUITTING_ENV_VAR_NAME = "CMD_LINE_TOOL_NUM_REQUEST_RETRY_CYCLES_BEFORE_QUITTING";
 const char* mystore::Client::CLUSTER_MEMBERSHIP_FILE_NAME_ENV_VAR_NAME = "CLUSTER_MEMBERSHIP_FILE";
@@ -45,12 +45,16 @@ mystore::Client::Client(std::initializer_list<std::string> endpoints) {
 
 bool
 mystore::Client::put(std::string key, std::string value) {
-    return false;
+    int nextRequestIdentifier = this->getNextRequestIdentifier();
+
+    return this->putHelper(key, value, "", nextRequestIdentifier);
 }
 
 std::string
 mystore::Client::get(std::string key) {
-    return "";
+    int nextRequestIdentifier = this->getNextRequestIdentifier();
+
+    return getHelper(key, "", nextRequestIdentifier);
 }
 
 void
@@ -64,13 +68,8 @@ mystore::Client::getInformation() {
     return info;
 }
 
-bool
+std::string
 mystore::Client::getHelper(std::string key, std::string clientIdentifier, int requestIdentifier) {
-    return false;
-}
-
-bool
-mystore::Client::putHelper(std::string key, std::string value, std::string clientIdentifier, int requestIdentifier) {
     int numCyclesBeforeQuitting =
             atoi(dotenv::env[mystore::Client::NUM_RETRY_CYCLES_BEFORE_QUITTING_ENV_VAR_NAME].c_str());
     int numRetriesBeforeChangingRequestID =
@@ -93,6 +92,82 @@ mystore::Client::putHelper(std::string key, std::string value, std::string clien
             std::shared_ptr<apache::thrift::transport::TTransport> transport(new apache::thrift::transport::TBufferedTransport(socket));
             std::shared_ptr<apache::thrift::protocol::TProtocol> protocol(new apache::thrift::protocol::TBinaryProtocol(transport));
             ReplicaServiceClient client(protocol);
+
+            try {
+                transport->open();
+
+                try {
+                    GetResponse getResponse;
+                    client.get(getResponse, key, clientIdentifier, currentRequestNumber);
+
+                    if(getResponse.success) {
+                        std::ofstream leaderFileObj(dotenv::env[mystore::Client::MOST_RECENT_LEADER_ADDR_ENV_VAR_NAME].c_str());
+                        leaderFileObj << host << ":" << port << std::endl;
+                        this->setNextRequestIdentifier(currentRequestNumber+1);
+
+                        return getResponse.value;
+                    }
+                    else if(mystore::Client::isNullID(getResponse.leaderID)) {
+                        std::pair<std::string, int> leaderInfo = this->getRandomReplica();
+                        host = leaderInfo.first;
+                        port = leaderInfo.second;
+                    }
+                    else {
+                        host = getResponse.leaderID.hostname;
+                        port = getResponse.leaderID.port;
+                    }
+                }
+                catch(TTransportException& e) {
+                }
+            }
+            catch(TTransportException& e) {
+                std::pair<std::string, int> leaderInfo = this->getRandomReplica();
+                host = leaderInfo.first;
+                port = leaderInfo.second;
+            }
+
+            std::this_thread::sleep_for(std::chrono::milliseconds(pauseDurationAfterRetryMS));
+        }
+
+        ++currentRequestNumber;
+    }
+
+    throw GetFailureException();
+}
+
+bool
+mystore::Client::putHelper(std::string key, std::string value, std::string clientIdentifier, int requestIdentifier) {
+    int numCyclesBeforeQuitting =
+            atoi(dotenv::env[mystore::Client::NUM_RETRY_CYCLES_BEFORE_QUITTING_ENV_VAR_NAME].c_str());
+    int numRetriesBeforeChangingRequestID =
+            atoi(dotenv::env[mystore::Client::NUM_REQUEST_RETRIES_ENV_VAR_NAME].c_str());
+    int pauseDurationAfterRetryMS =
+            atoi(dotenv::env[mystore::Client::REST_PERIOD_BETWEEN_CALLS_ENV_VAR_NAME].c_str());
+
+    std::cout << dotenv::env["CMD_LINE_TOOL_TIMEOUT_MS"] << "\n";
+    std::cout << numCyclesBeforeQuitting << std::endl;
+    std::cout << numRetriesBeforeChangingRequestID << std::endl;
+    std::cout << pauseDurationAfterRetryMS << std::endl;
+    std::cout << mystore::Client::NUM_RETRY_CYCLES_BEFORE_QUITTING_ENV_VAR_NAME << "\n";
+
+    std::pair<std::string, int> replicaInfo = this->getLeaderInfo();
+
+    int currentRequestNumber = requestIdentifier;
+    std::string host = replicaInfo.first;
+    int port = replicaInfo.second;
+
+    for(int cycleNum = 0; cycleNum < numCyclesBeforeQuitting; ++cycleNum) {
+        std::cout << "in looop\n";
+        for(int retryNum = 0; retryNum < numRetriesBeforeChangingRequestID; ++retryNum) {
+            std::cout << "inner loop\n";
+            std::shared_ptr<apache::thrift::transport::TSocket> socket(new apache::thrift::transport::TSocket(host, port));
+            socket->setConnTimeout(atoi(dotenv::env[mystore::Client::RPC_TIMEOUT_ENV_VAR_NAME].c_str()));
+            socket->setSendTimeout(atoi(dotenv::env[mystore::Client::RPC_TIMEOUT_ENV_VAR_NAME].c_str()));
+            socket->setRecvTimeout(atoi(dotenv::env[mystore::Client::RPC_TIMEOUT_ENV_VAR_NAME].c_str()));
+            std::shared_ptr<apache::thrift::transport::TTransport> transport(new apache::thrift::transport::TBufferedTransport(socket));
+            std::shared_ptr<apache::thrift::protocol::TProtocol> protocol(new apache::thrift::protocol::TBinaryProtocol(transport));
+            ReplicaServiceClient client(protocol);
+
 
             try {
                 transport->open();

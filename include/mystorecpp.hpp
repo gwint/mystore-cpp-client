@@ -25,7 +25,7 @@ namespace mystore {
         private:
             std::vector<std::string> endpoints;
 
-            bool getHelper(std::string, std::string, int);
+            std::string getHelper(std::string, std::string, int);
             bool putHelper(std::string, std::string, std::string, int);
             std::pair<std::string, int> getLeaderInfo();
             std::pair<std::string, int> getRandomReplica();

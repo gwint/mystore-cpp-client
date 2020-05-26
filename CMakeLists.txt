@@ -26,7 +26,8 @@ set(ThriftGeneratedFiles
     ${CMAKE_CURRENT_SOURCE_DIR}/gen-cpp/replicaservice_constants.cpp
 )
 
-##set(ClientFiles lib/mystorecpp.cpp tests/testclient.cpp)
+#set(ClientFiles lib/mystorecpp.cpp tests/testclient.cpp)
+set(ClientTestFiles lib/mystorecpp.cpp tests/testclient.cpp)
 set(ClientFiles lib/mystorecpp.cpp)
 
 add_library(MyStoreClient ${ThriftGeneratedFiles} ${ClientFiles})
@@ -39,7 +40,15 @@ target_include_directories(MyStoreClient
 
 add_dependencies(MyStoreClient cpp-dotenv)
 
-##add_executable(MyStoreTests ${ThriftGeneratedFiles} ${ClientFiles})
+add_executable(MyStoreTests ${ThriftGeneratedFiles} ${ClientTestFiles})
+
+target_include_directories(MyStoreTests
+    PUBLIC cpp-dotenv/src/cpp-dotenv/
+    PUBLIC gen-cpp
+    PUBLIC include
+)
+
+add_dependencies(MyStoreTests cpp-dotenv)
 
 target_link_libraries(MyStoreClient thrift)
-##target_link_libraries(MyStoreTests thrift)
+target_link_libraries(MyStoreTests thrift)
