@@ -17,6 +17,10 @@
 #include "ReplicaService.h"
 
 namespace mystore {
+    class PutFailureException {};
+
+    class GetFailureException {};
+
     class Client {
         private:
             std::vector<std::string> endpoints;

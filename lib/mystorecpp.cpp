@@ -8,6 +8,7 @@
 #include <iostream>
 #include <algorithm>
 #include <stdexcept>
+#include <chrono>
 
 #include <thrift/transport/TServerSocket.h>
 #include <thrift/transport/TBufferTransports.h>
@@ -21,6 +22,8 @@
 #include "dotenv.h"
 
 #include "mystorecpp.hpp"
+
+using apache::thrift::transport::TTransportException;
 
 const char* mystore::Client::REQUEST_IDENTIFIER_ENV_VAR_NAME = "REQUEST_ID_FILE";
 const char* mystore::Client::MOST_RECENT_LEADER_ADDR_ENV_VAR_NAME = "CURRENT_LEADER_INFO_FILE";
@@ -83,10 +86,54 @@ mystore::Client::putHelper(std::string key, std::string value, std::string clien
 
     for(int cycleNum = 0; cycleNum < numCyclesBeforeQuitting; ++cycleNum) {
         for(int retryNum = 0; retryNum < numRetriesBeforeChangingRequestID; ++retryNum) {
+            std::shared_ptr<apache::thrift::transport::TSocket> socket(new apache::thrift::transport::TSocket(host, port));
+            socket->setConnTimeout(atoi(dotenv::env[mystore::Client::RPC_TIMEOUT_ENV_VAR_NAME].c_str()));
+            socket->setSendTimeout(atoi(dotenv::env[mystore::Client::RPC_TIMEOUT_ENV_VAR_NAME].c_str()));
+            socket->setRecvTimeout(atoi(dotenv::env[mystore::Client::RPC_TIMEOUT_ENV_VAR_NAME].c_str()));
+            std::shared_ptr<apache::thrift::transport::TTransport> transport(new apache::thrift::transport::TBufferedTransport(socket));
+            std::shared_ptr<apache::thrift::protocol::TProtocol> protocol(new apache::thrift::protocol::TBinaryProtocol(transport));
+            ReplicaServiceClient client(protocol);
+
+            try {
+                transport->open();
+
+                try {
+                    PutResponse putResponse;
+                    client.put(putResponse, key, value, clientIdentifier, currentRequestNumber);
+
+                    if(putResponse.success) {
+                        std::ofstream leaderFileObj(dotenv::env[mystore::Client::MOST_RECENT_LEADER_ADDR_ENV_VAR_NAME].c_str());
+                        leaderFileObj << host << ":" << port << std::endl;
+                        this->setNextRequestIdentifier(currentRequestNumber+1);
+
+                        return true;
+                    }
+                    else if(mystore::Client::isNullID(putResponse.leaderID)) {
+                        std::pair<std::string, int> leaderInfo = this->getRandomReplica();
+                        host = leaderInfo.first;
+                        port = leaderInfo.second;
+                    }
+                    else {
+                        host = putResponse.leaderID.hostname;
+                        port = putResponse.leaderID.port;
+                    }
+                }
+                catch(TTransportException& e) {
+                }
+            }
+            catch(TTransportException& e) {
+                std::pair<std::string, int> leaderInfo = this->getRandomReplica();
+                host = leaderInfo.first;
+                port = leaderInfo.second;
+            }
+
+            std::this_thread::sleep_for(std::chrono::milliseconds(pauseDurationAfterRetryMS*2));
         }
+
+        ++currentRequestNumber;
     }
 
-    return false;
+    throw mystore::PutFailureException();
 }
 
 std::pair<std::string, int>
@@ -138,4 +185,30 @@ mystore::Client::getRandomReplica() {
 bool
 mystore::Client::isNullID(const ID& id) {
     return id.hostname == "" && id.port == 0;
+}
+
+void
+mystore::Client::setNextRequestIdentifier(int nextRequestIdentifier) {
+    std::ofstream requestIdentifierFileObj(dotenv::env[mystore::Client::REQUEST_IDENTIFIER_ENV_VAR_NAME].c_str());
+    requestIdentifierFileObj << nextRequestIdentifier << std::endl;
+    requestIdentifierFileObj.close();
+}
+
+int
+mystore::Client::getNextRequestIdentifier() {
+    std::ifstream requestIdentifierFileObj(dotenv::env[mystore::Client::REQUEST_IDENTIFIER_ENV_VAR_NAME].c_str());
+    if(requestIdentifierFileObj.fail()) {
+        std::ofstream requestIdentifierFileObj(dotenv::env[mystore::Client::REQUEST_IDENTIFIER_ENV_VAR_NAME].c_str());
+        requestIdentifierFileObj << 0 << std::endl;
+        requestIdentifierFileObj.close();
+
+        return 0;
+    }
+
+    int nextIdentifier;
+    requestIdentifierFileObj >> nextIdentifier;
+
+    requestIdentifierFileObj.close();
+
+    return nextIdentifier;
 }
