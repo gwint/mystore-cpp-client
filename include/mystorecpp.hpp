@@ -3,6 +3,7 @@
 
 #include <string>
 #include <unordered_map>
+#include <map>
 #include <initializer_list>
 #include <vector>
 
@@ -47,7 +48,7 @@ namespace mystore {
             bool put(std::string, std::string);
             std::string get(std::string);
             void killReplica(std::string);
-            std::unordered_map<std::string, std::unordered_map<std::string, std::string>> getInformation();
+            std::unordered_map<std::string, std::map<std::string, std::string>> getInformation();
     };
 }
 

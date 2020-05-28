@@ -9,6 +9,8 @@
 #include <algorithm>
 #include <stdexcept>
 #include <chrono>
+#include <unordered_map>
+#include <map>
 
 #include <thrift/transport/TServerSocket.h>
 #include <thrift/transport/TBufferTransports.h>
@@ -59,11 +61,71 @@ mystore::Client::get(std::string key) {
 
 void
 mystore::Client::killReplica(std::string endpoint) {
+    std::replace(endpoint.begin(), endpoint.end(), ':', ' ');
+
+    std::stringstream endpointStream(endpoint);
+    std::string host;
+    int port;
+
+    endpointStream >> host >> port;
+
+    std::shared_ptr<apache::thrift::transport::TSocket> socket(new apache::thrift::transport::TSocket(host, port));
+    socket->setConnTimeout(atoi(dotenv::env[mystore::Client::RPC_TIMEOUT_ENV_VAR_NAME].c_str()));
+    socket->setSendTimeout(atoi(dotenv::env[mystore::Client::RPC_TIMEOUT_ENV_VAR_NAME].c_str()));
+    socket->setRecvTimeout(atoi(dotenv::env[mystore::Client::RPC_TIMEOUT_ENV_VAR_NAME].c_str()));
+    std::shared_ptr<apache::thrift::transport::TTransport> transport(new apache::thrift::transport::TBufferedTransport(socket));
+    std::shared_ptr<apache::thrift::protocol::TProtocol> protocol(new apache::thrift::protocol::TBinaryProtocol(transport));
+    ReplicaServiceClient client(protocol);
+
+    transport->open();
+
+    client.kill();
 }
 
-std::unordered_map<std::string, std::unordered_map<std::string, std::string>>
+std::unordered_map<std::string, std::map<std::string, std::string>>
 mystore::Client::getInformation() {
-    std::unordered_map<std::string, std::unordered_map<std::string, std::string>> info;
+    std::unordered_map<std::string, std::map<std::string, std::string>> info;
+
+    for(std::string endpoint : this->endpoints) {
+        std::replace(endpoint.begin(), endpoint.end(), ':', ' ');
+
+        std::stringstream endpointStream(endpoint);
+
+        std::string host;
+        int port;
+
+        endpointStream >> host >> port;
+
+        std::shared_ptr<apache::thrift::transport::TSocket> socket(new apache::thrift::transport::TSocket(host, port));
+        socket->setConnTimeout(atoi(dotenv::env[mystore::Client::RPC_TIMEOUT_ENV_VAR_NAME].c_str()));
+        socket->setSendTimeout(atoi(dotenv::env[mystore::Client::RPC_TIMEOUT_ENV_VAR_NAME].c_str()));
+        socket->setRecvTimeout(atoi(dotenv::env[mystore::Client::RPC_TIMEOUT_ENV_VAR_NAME].c_str()));
+        std::shared_ptr<apache::thrift::transport::TTransport> transport(new apache::thrift::transport::TBufferedTransport(socket));
+        std::shared_ptr<apache::thrift::protocol::TProtocol> protocol(new apache::thrift::protocol::TBinaryProtocol(transport));
+        ReplicaServiceClient client(protocol);
+
+        try {
+            transport->open();
+
+            std::map<std::string, std::string> singleReplicaInfo;
+            try {
+                client.getInformation(singleReplicaInfo);
+            }
+            catch(TTransportException& e) {
+                singleReplicaInfo.insert({"role", "N/A"});
+                singleReplicaInfo.insert({"term", "N/A"});
+                singleReplicaInfo.insert({"index", "N/A"});
+            }
+            info.insert({endpoint, singleReplicaInfo});
+        }
+        catch(TTransportException& e) {
+            std::map<std::string, std::string> singleReplicaInfo;
+            singleReplicaInfo.insert({"role", "N/A"});
+            singleReplicaInfo.insert({"term", "N/A"});
+            singleReplicaInfo.insert({"index", "N/A"});
+            info.insert({endpoint, singleReplicaInfo});
+        }
+    }
 
     return info;
 }
@@ -159,7 +221,6 @@ mystore::Client::putHelper(std::string key, std::string value, std::string clien
             std::shared_ptr<apache::thrift::transport::TTransport> transport(new apache::thrift::transport::TBufferedTransport(socket));
             std::shared_ptr<apache::thrift::protocol::TProtocol> protocol(new apache::thrift::protocol::TBinaryProtocol(transport));
             ReplicaServiceClient client(protocol);
-
 
             try {
                 transport->open();
