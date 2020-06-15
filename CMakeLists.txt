@@ -8,11 +8,8 @@ set(CMAKE_CXX_FLAGS "-Wall -pedantic -g -O3")
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
-execute_process(
-    COMMAND thrift -r --gen cpp replicaservice.thrift
-    COMMAND thrift -r --gen py replicaservice.thrift
-    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/
-)
+set(ClientTestFiles lib/mystorecpp.cpp tests/testclient.cpp)
+set(ClientFiles lib/mystorecpp.cpp)
 
 ExternalProject_Add(cpp-dotenv
     PREFIX ${CMAKE_CURRENT_SOURCE_DIR}/cpp-dotenv
@@ -20,17 +17,23 @@ ExternalProject_Add(cpp-dotenv
     INSTALL_COMMAND ""
 )
 
-set(ThriftGeneratedFiles
+add_custom_command(
+    OUTPUT ${CMAKE_CURRENT_SOURCE_DIR}/gen-cpp
+           ${CMAKE_CURRENT_SOURCE_DIR}/gen-cpp/ReplicaService.cpp
+           ${CMAKE_CURRENT_SOURCE_DIR}/gen-cpp/replicaservice_types.cpp
+           ${CMAKE_CURRENT_SOURCE_DIR}/gen-cpp/replicaservice_constants.cpp
+    COMMAND thrift -r --gen cpp ${CMAKE_CURRENT_SOURCE_DIR}/replicaservice.thrift
+    DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/replicaservice.thrift
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+)
+
+add_library(ThriftFileCompilation
     ${CMAKE_CURRENT_SOURCE_DIR}/gen-cpp/ReplicaService.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/gen-cpp/replicaservice_types.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/gen-cpp/replicaservice_constants.cpp
 )
 
-#set(ClientFiles lib/mystorecpp.cpp tests/testclient.cpp)
-set(ClientTestFiles lib/mystorecpp.cpp tests/testclient.cpp)
-set(ClientFiles lib/mystorecpp.cpp)
-
-add_library(MyStoreClient ${ThriftGeneratedFiles} ${ClientFiles})
+add_library(MyStoreClient ${ClientFiles})
 
 target_include_directories(MyStoreClient
     PUBLIC cpp-dotenv/src/cpp-dotenv/
@@ -38,9 +41,7 @@ target_include_directories(MyStoreClient
     PUBLIC include
 )
 
-add_dependencies(MyStoreClient cpp-dotenv)
-
-add_executable(MyStoreTests ${ThriftGeneratedFiles} ${ClientTestFiles})
+add_executable(MyStoreTests ${ClientTestFiles})
 
 target_include_directories(MyStoreTests
     PUBLIC cpp-dotenv/src/cpp-dotenv/
@@ -48,7 +49,10 @@ target_include_directories(MyStoreTests
     PUBLIC include
 )
 
-add_dependencies(MyStoreTests cpp-dotenv)
-
+add_dependencies(MyStoreClient cpp-dotenv)
+target_link_libraries(MyStoreClient ThriftFileCompilation)
 target_link_libraries(MyStoreClient thrift)
+
+add_dependencies(MyStoreTests cpp-dotenv)
+target_link_libraries(MyStoreTests ThriftFileCompilation)
 target_link_libraries(MyStoreTests thrift)
