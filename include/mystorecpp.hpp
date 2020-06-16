@@ -26,7 +26,7 @@ namespace mystore {
         private:
             std::vector<std::string> endpoints;
 
-            std::string getHelper(std::string, std::string, int);
+            std::vector<std::string> getHelper(std::string, std::string, int, int);
             bool putHelper(std::string, std::string, std::string, int);
             std::pair<std::string, int> getLeaderInfo();
             std::pair<std::string, int> getRandomReplica();
@@ -46,9 +46,10 @@ namespace mystore {
         public:
             Client(std::initializer_list<std::string>);
             bool put(std::string, std::string);
-            std::string get(std::string);
+            std::vector<std::string> get(std::string, int);
             void killReplica(std::string);
             std::unordered_map<std::string, std::map<std::string, std::string>> getInformation();
+            bool delKey(std::string);
     };
 }
 
