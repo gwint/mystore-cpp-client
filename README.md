@@ -6,6 +6,7 @@ mystorecpp is the official C++ client for mystore v1.0.
 ```cpp
 #include "mystorecpp"
 #include <iostream>
+#include <vector>
 
 int main() {
 
@@ -21,8 +22,8 @@ int main() {
     }
 
     // find value associated with a key
-    std::string val = client.get("akey");
-    if(val == "aval") {
+    std::vector<std::string> vals = client.get("akey");
+    if(!vals.empty()) {
         std::cout << "get successful\n";
     }
 
