@@ -22,12 +22,15 @@ namespace mystore {
 
     class GetFailureException {};
 
+    class DelFailureException {};
+
     class Client {
         private:
             std::vector<std::string> endpoints;
 
             std::vector<std::string> getHelper(std::string, std::string, int, int);
             bool putHelper(std::string, std::string, std::string, int);
+            bool delKeyHelper(std::string, std::string, int);
             std::pair<std::string, int> getLeaderInfo();
             std::pair<std::string, int> getRandomReplica();
             int getNextRequestIdentifier();
