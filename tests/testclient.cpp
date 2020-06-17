@@ -27,7 +27,7 @@ int main() {
         std::cout << "Put request successful\n";
     }
 
-    std::vector<std::string> val = client.get("akey", 0);
+    std::vector<std::string> val = client.get("akey");
     std::cout << "Retrieved value: " << val << "\n";
 
     auto info = client.getInformation();

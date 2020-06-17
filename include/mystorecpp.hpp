@@ -49,7 +49,7 @@ namespace mystore {
         public:
             Client(std::initializer_list<std::string>);
             bool put(std::string, std::string);
-            std::vector<std::string> get(std::string, int);
+            std::vector<std::string> get(std::string, int=0);
             void killReplica(std::string);
             std::unordered_map<std::string, std::map<std::string, std::string>> getInformation();
             bool delKey(std::string);
